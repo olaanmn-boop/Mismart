@@ -1,0 +1,792 @@
+markdown
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Drift: Pro Racer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+
+        :root {
+            --primary: #00f3ff;
+            --secondary: #bc13fe;
+            --glass: rgba(15, 23, 42, 0.6);
+        }
+
+        body {
+            margin: 0;
+            background-color: #0f172a; /* Slate 900 */
+            font-family: 'Orbitron', sans-serif;
+            overflow: hidden;
+            color: white;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* CRITICAL: Centering Container */
+        #app-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #1e293b 0%, #000000 100%);
+        }
+
+        /* The Game Aspect Ratio Container */
+        #game-frame {
+            position: relative;
+            width: 100%;
+            max-width: 1280px;
+            aspect-ratio: 16/9;
+            background: #000;
+            box-shadow: 0 0 50px rgba(0, 243, 255, 0.1);
+            overflow: hidden;
+            border-radius: 8px;
+        }
+
+        /* On portrait mobile, fill height */
+        @media (max-aspect-ratio: 16/9) {
+            #game-frame {
+                width: 100%;
+                height: 100%;
+                max-width: none;
+                border-radius: 0;
+            }
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+
+        /* UI Overlay */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 10;
+            padding: 20px;
+        }
+
+        /* HUD Elements */
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .stat-card {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 25px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transform: skewX(-10deg);
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 900;
+            background: linear-gradient(to bottom, #fff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .speed-unit { font-size: 0.8rem; color: var(--primary); }
+
+        /* Controls */
+        .controls-container {
+            pointer-events: auto;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 10px;
+        }
+
+        .touch-btn {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: white;
+            transition: all 0.1s;
+            touch-action: none;
+            margin: 0 10px;
+        }
+
+        .touch-btn:active, .touch-btn.active {
+            background: var(--primary);
+            border-color: white;
+            transform: scale(0.95);
+            box-shadow: 0 0 15px var(--primary);
+        }
+
+        .btn-brake { border-color: #ef4444; }
+        .btn-brake:active { background: #ef4444; box-shadow: 0 0 15px #ef4444; }
+
+        /* Menus */
+        .menu-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            pointer-events: auto;
+            transition: opacity 0.3s;
+        }
+
+        .hidden { opacity: 0; pointer-events: none; }
+
+        h1.title {
+            font-size: 4rem;
+            margin: 0;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(188, 19, 254, 0.5);
+            font-style: italic;
+            text-align: center;
+            line-height: 1.1;
+        }
+
+        .btn-primary {
+            margin-top: 30px;
+            padding: 15px 50px;
+            font-size: 1.5rem;
+            font-family: inherit;
+            font-weight: bold;
+            color: #000;
+            background: var(--primary);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transform: skewX(-10deg);
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: skewX(-10deg) scale(1.05);
+            box-shadow: 0 0 40px rgba(0, 243, 255, 0.6);
+        }
+
+        /* Vignette for cinematic look */
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, transparent 60%, black 100%);
+            pointer-events: none;
+            z-index: 5;
+        }
+    </style>
+    <!-- Import Maps for Three.js & Cannon -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+<div id="app-wrapper">
+    <div id="game-frame">
+        <!-- 3D Canvas Container -->
+        <div id="canvas-container" class="absolute inset-0"></div>
+        
+        <!-- Cinematic Vignette -->
+        <div class="vignette"></div>
+
+        <!-- UI Layer -->
+        <div class="ui-layer">
+            <div class="hud-top">
+                <div class="stat-card">
+                    <span class="stat-label">Score</span>
+                    <span class="stat-value" id="score">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Speed</span>
+                    <div>
+                        <span class="stat-value" id="speed">0</span>
+                        <span class="speed-unit">KM/H</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-container">
+                <div class="flex">
+                    <div class="touch-btn" id="btn-left">◀</div>
+                    <div class="touch-btn" id="btn-right">▶</div>
+                </div>
+                <div class="flex">
+                    <div class="touch-btn btn-brake" id="btn-brake">🛑</div>
+                    <div class="touch-btn" id="btn-gas">⚡</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Menu -->
+        <div class="menu-overlay" id="main-menu">
+            <h1 class="title">NEON<br>DRIFT</h1>
+            <p class="text-gray-400 mt-4 text-lg tracking-widest">PROFESSIONAL EDITION</p>
+            <button class="btn-primary" id="start-btn">START ENGINE</button>
+            <p class="text-xs text-gray-500 mt-8">Desktop: Arrows/WASD • Mobile: Touch</p>
+        </div>
+
+        <!-- Game Over -->
+        <div class="menu-overlay hidden" id="game-over">
+            <h1 class="title" style="background: linear-gradient(to right, #ef4444, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">CRASHED</h1>
+            <p class="text-white text-xl mt-4">FINAL SCORE: <span id="final-score" class="text-primary font-bold">0</span></p>
+            <button class="btn-primary" id="restart-btn">RETRY</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import * as THREE from 'three';
+    import * as CANNON from 'cannon-es';
+
+    // --- CONFIGURATION ---
+    const CONFIG = {
+        colors: {
+            skyTop: 0x0f172a,
+            skyBottom: 0x1e293b,
+            grid: 0x00f3ff,
+            carBody: 0xff0055,
+            carGlass: 0x000000
+        },
+        physics: {
+            maxSpeed: 60,
+            acceleration: 50,
+            turnSpeed: 3.0,
+            grip: 3.0, // Higher = less drift
+            driftGrip: 1.0 // Grip when drifting
+        }
+    };
+
+    // --- GAME STATE ---
+    const state = {
+        isPlaying: false,
+        score: 0,
+        speed: 0,
+        inputs: { up: false, down: false, left: false, right: false },
+        coins: [],
+        obstacles: [],
+        particles: []
+    };
+
+    // --- SETUP ---
+    const container = document.getElementById('canvas-container');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(CONFIG.colors.skyTop);
+    scene.fog = new THREE.FogExp2(CONFIG.colors.skyTop, 0.015);
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 300);
+    
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    sunLight.position.set(50, 100, 50);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 200;
+    const d = 50;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    scene.add(sunLight);
+
+    // Physics World
+    const world = new CANNON.World();
+    world.gravity.set(0, -20, 0);
+    
+    // Materials
+    const groundMat = new CANNON.Material();
+    const carMat = new CANNON.Material();
+    const contactMat = new CANNON.ContactMaterial(groundMat, carMat, {
+        friction: 0.0, // We handle friction manually for arcade feel
+        restitution: 0.0
+    });
+    world.addContactMaterial(contactMat);
+
+    // --- PROCEDURAL TEXTURES ---
+    function createGridTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        // Dark Asphalt
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0,0,512,512);
+        
+        // Grid Lines
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        // Vertical
+        for(let i=0; i<=512; i+=64) { ctx.moveTo(i,0); ctx.lineTo(i,512); }
+        // Horizontal
+        for(let i=0; i<=512; i+=64) { ctx.moveTo(0,i); ctx.lineTo(512,i); }
+        ctx.stroke();
+
+        // Noise (Grain)
+        const imageData = ctx.getImageData(0,0,512,512);
+        const data = imageData.data;
+        for(let i=0; i<data.length; i+=4) {
+            const noise = (Math.random() - 0.5) * 20;
+            data[i] += noise;
+            data[i+1] += noise;
+            data[i+2] += noise;
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(100, 100);
+        tex.anisotropy = 16;
+        return tex;
+    }
+
+    // --- OBJECTS ---
+
+    // 1. Ground
+    const groundGeo = new THREE.PlaneGeometry(1000, 1000);
+    const groundMeshMat = new THREE.MeshStandardMaterial({ 
+        map: createGridTexture(),
+        roughness: 0.8,
+        metalness: 0.2
+    });
+    const ground = new THREE.Mesh(groundGeo, groundMeshMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const groundBody = new CANNON.Body({ mass: 0, material: groundMat });
+    groundBody.addShape(new CANNON.Plane());
+    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    world.addBody(groundBody);
+
+    // 2. The Car (Professional Model)
+    function createCar() {
+        const group = new THREE.Group();
+
+        // Body
+        const bodyGeo = new THREE.BoxGeometry(1.8, 0.6, 4);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.carBody, roughness: 0.2, metalness: 0.6 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.6;
+        body.castShadow = true;
+        group.add(body);
+
+        // Cabin
+        const cabinGeo = new THREE.BoxGeometry(1.4, 0.5, 2);
+        const cabinMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.0, metalness: 0.9 });
+        const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+        cabin.position.set(0, 1.1, -0.2);
+        cabin.castShadow = true;
+        group.add(cabin);
+
+        // Spoiler
+        const spoilerGeo = new THREE.BoxGeometry(1.8, 0.1, 0.5);
+        const spoiler = new THREE.Mesh(spoilerGeo, bodyMat);
+        spoiler.position.set(0, 1.1, 1.8);
+        group.add(spoiler);
+        
+        // Spoiler struts
+        const strutGeo = new THREE.BoxGeometry(0.1, 0.4, 0.1);
+        const strutL = new THREE.Mesh(strutGeo, new THREE.MeshStandardMaterial({color:0x333333}));
+        strutL.position.set(-0.6, 0.9, 1.8);
+        const strutR = strutL.clone();
+        strutR.position.set(0.6, 0.9, 1.8);
+        group.add(strutL);
+        group.add(strutR);
+
+        // Lights (Glowing)
+        const tailLightGeo = new THREE.BoxGeometry(0.6, 0.1, 0.1);
+        const tailLightMat = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 2 });
+        const tl = new THREE.Mesh(tailLightGeo, tailLightMat);
+        tl.position.set(-0.5, 0.7, 2.0);
+        const tr = tl.clone();
+        tr.position.set(0.5, 0.7, 2.0);
+        group.add(tl);
+        group.add(tr);
+
+        // Headlights
+        const headLightMat = new THREE.MeshStandardMaterial({ color: 0xaaffff, emissive: 0xaaffff, emissiveIntensity: 2 });
+        const hl = new THREE.Mesh(tailLightGeo, headLightMat);
+        hl.position.set(-0.5, 0.6, -2.0);
+        const hr = hl.clone();
+        hr.position.set(0.5, 0.6, -2.0);
+        group.add(hl);
+        group.add(hr);
+
+        // Wheels
+        const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 24);
+        wheelGeo.rotateZ(Math.PI/2);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+        
+        const wPos = [[-0.9, 0.4, 1.2], [0.9, 0.4, 1.2], [-0.9, 0.4, -1.2], [0.9, 0.4, -1.2]];
+        wPos.forEach(p => {
+            const w = new THREE.Mesh(wheelGeo, wheelMat);
+            w.position.set(...p);
+            w.castShadow = true;
+            group.add(w);
+        });
+
+        return group;
+    }
+
+    const carMesh = createCar();
+    scene.add(carMesh);
+
+    // Physics Car (Sphere for smooth collision, but logic handles orientation)
+    const carShape = new CANNON.Sphere(1);
+    const carBody = new CANNON.Body({ mass: 150, material: carMat });
+    carBody.addShape(carShape);
+    carBody.linearDamping = 0.1;
+    carBody.angularDamping = 0.99; // Prevent rolling
+    carBody.position.set(0, 2, 0);
+    world.addBody(carBody);
+
+    // 3. Environment (Neon Pillars)
+    const pillarGeo = new THREE.BoxGeometry(1, 10, 1);
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    const neonMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.secondary, emissive: CONFIG.colors.secondary, emissiveIntensity: 1 });
+
+    function spawnObstacle(x, z) {
+        const group = new THREE.Group();
+        const p = new THREE.Mesh(pillarGeo, pillarMat);
+        p.position.y = 5;
+        p.castShadow = true;
+        group.add(p);
+
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(1.1, 10, 0.2), neonMat);
+        strip.position.y = 5;
+        group.add(strip);
+        
+        group.position.set(x, 0, z);
+        scene.add(group);
+
+        const body = new CANNON.Body({ mass: 0 });
+        body.addShape(new CANNON.Box(new CANNON.Vec3(0.5, 5, 0.5)));
+        body.position.set(x, 5, z);
+        world.addBody(body);
+        state.obstacles.push({ mesh: group, body: body });
+    }
+
+    // 4. Coins
+    const coinGeo = new THREE.TorusGeometry(0.8, 0.2, 8, 16);
+    const coinMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 1, roughness: 0.1, emissive: 0xffa500, emissiveIntensity: 0.5 });
+
+    function spawnCoin(x, z) {
+        const coin = new THREE.Mesh(coinGeo, coinMat);
+        coin.position.set(x, 1.5, z);
+        scene.add(coin);
+        
+        // Trigger
+        const body = new CANNON.Body({ mass: 0, isTrigger: true });
+        body.addShape(new CANNON.Sphere(1));
+        body.position.set(x, 1.5, z);
+        world.addBody(body);
+
+        body.addEventListener('collide', (e) => {
+            if(e.body === carBody) collectCoin(coin, body);
+        });
+
+        state.coins.push({ mesh: coin, body: body });
+    }
+
+    function collectCoin(mesh, body) {
+        world.removeBody(body);
+        scene.remove(mesh);
+        state.score += 100;
+        document.getElementById('score').innerText = state.score;
+        
+        // Spawn particle burst
+        for(let i=0; i<5; i++) {
+            spawnParticle(mesh.position, 0xffff00, 2);
+        }
+
+        // Respawn logic
+        const index = state.coins.findIndex(c => c.mesh === mesh);
+        if(index > -1) state.coins.splice(index, 1);
+        
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 40 + Math.random() * 100;
+        spawnCoin(Math.cos(angle)*dist, Math.sin(angle)*dist);
+    }
+
+    // --- PARTICLES ---
+    const particleGeo = new THREE.PlaneGeometry(0.4, 0.4);
+    function spawnParticle(pos, color, speed) {
+        const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.8 });
+        const p = new THREE.Mesh(particleGeo, mat);
+        p.position.copy(pos);
+        p.lookAt(camera.position);
+        
+        const vel = new THREE.Vector3((Math.random()-0.5), (Math.random()), (Math.random()-0.5)).normalize().multiplyScalar(speed);
+        
+        scene.add(p);
+        state.particles.push({ mesh: p, vel: vel, life: 1.0 });
+    }
+
+    // --- INPUTS ---
+    const setInput = (k, v) => state.inputs[k] = v;
+    window.addEventListener('keydown', e => {
+        if(e.key === 'ArrowUp' || e.key === 'w') setInput('up', true);
+        if(e.key === 'ArrowDown' || e.key === 's') setInput('down', true);
+        if(e.key === 'ArrowLeft' || e.key === 'a') setInput('left', true);
+        if(e.key === 'ArrowRight' || e.key === 'd') setInput('right', true);
+    });
+    window.addEventListener('keyup', e => {
+        if(e.key === 'ArrowUp' || e.key === 'w') setInput('up', false);
+        if(e.key === 'ArrowDown' || e.key === 's') setInput('down', false);
+        if(e.key === 'ArrowLeft' || e.key === 'a') setInput('left', false);
+        if(e.key === 'ArrowRight' || e.key === 'd') setInput('right', false);
+    });
+
+    const bindTouch = (id, k) => {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', e => { e.preventDefault(); setInput(k, true); el.classList.add('active'); });
+        el.addEventListener('touchend', e => { e.preventDefault(); setInput(k, false); el.classList.remove('active'); });
+    };
+    bindTouch('btn-gas', 'up');
+    bindTouch('btn-brake', 'down');
+    bindTouch('btn-left', 'left');
+    bindTouch('btn-right', 'right');
+
+    // --- PHYSICS ENGINE (CUSTOM ARCADE) ---
+    let carHeading = 0;
+    let carVelocity = new THREE.Vector3();
+
+    function updateCarPhysics(dt) {
+        if(!state.isPlaying) return;
+
+        // 1. Get local velocity
+        const quat = new THREE.Quaternion();
+        quat.setFromAxisAngle(new THREE.Vector3(0,1,0), carHeading);
+        
+        const forward = new THREE.Vector3(0,0,-1).applyQuaternion(quat);
+        const right = new THREE.Vector3(1,0,0).applyQuaternion(quat);
+
+        const velocity = new THREE.Vector3(carBody.velocity.x, carBody.velocity.y, carBody.velocity.z);
+        const localVelZ = velocity.dot(forward);
+        const localVelX = velocity.dot(right);
+
+        // 2. Input Forces
+        let accel = 0;
+        if(state.inputs.up) accel = CONFIG.physics.acceleration;
+        if(state.inputs.down) accel = -CONFIG.physics.acceleration;
+
+        // 3. Steering
+        const speedFactor = Math.min(Math.abs(localVelZ) / 10, 1);
+        const turn = state.inputs.left ? 1 : (state.inputs.right ? -1 : 0);
+        
+        if(speedFactor > 0.1) {
+            carHeading += turn * CONFIG.physics.turnSpeed * dt * speedFactor;
+        }
+
+        // 4. Lateral Friction (Grip)
+        // If we are turning hard, reduce grip (drift)
+        const isDrifting = Math.abs(localVelX) > 5 && Math.abs(turn) > 0;
+        const currentGrip = isDrifting ? CONFIG.physics.driftGrip : CONFIG.physics.grip;
+        
+        // Apply counter-force to side velocity to simulate tires
+        const sideForce = -localVelX * currentGrip * 50; // 50 is mass factor approx
+        
+        // 5. Apply Forces to Cannon Body
+        const force = forward.clone().multiplyScalar(accel * 50); // Engine
+        force.add(right.clone().multiplyScalar(sideForce)); // Grip
+
+        carBody.applyForce(new CANNON.Vec3(force.x, 0, force.z), carBody.position);
+
+        // 6. Visual Sync
+        carMesh.position.copy(carBody.position);
+        carMesh.position.y -= 1.0; // Offset sphere
+
+        // Calculate visual roll/pitch
+        const roll = -turn * 0.1 * speedFactor;
+        const pitch = -accel * 0.0005;
+
+        const visualQuat = new THREE.Quaternion();
+        visualQuat.setFromEuler(new THREE.Euler(pitch, carHeading, roll));
+        carMesh.quaternion.slerp(visualQuat, 0.2);
+
+        // 7. Particles
+        if(isDrifting && Math.random() > 0.5) {
+            const offset = new THREE.Vector3((Math.random()-0.5)*1.5, -0.5, 1.5).applyQuaternion(visualQuat);
+            spawnParticle(carMesh.position.clone().add(offset), 0xaaaaaa, 0.1);
+        }
+        if(state.inputs.up && Math.random() > 0.8) {
+             const offset = new THREE.Vector3(0, 0, 2).applyQuaternion(visualQuat);
+             spawnParticle(carMesh.position.clone().add(offset), 0xffaa00, 0.2);
+        }
+
+        state.speed = Math.floor(velocity.length() * 3.6);
+    }
+
+    // --- LOOP ---
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = Math.min(clock.getDelta(), 0.1);
+
+        if(state.isPlaying) {
+            world.step(1/60, dt, 3);
+            updateCarPhysics(dt);
+
+            // Camera Follow
+            const targetPos = carMesh.position.clone();
+            targetPos.y += 6;
+            
+            // Look ahead based on velocity
+            const vel = new THREE.Vector3(carBody.velocity.x, 0, carBody.velocity.z);
+            targetPos.sub(vel.clone().normalize().multiplyScalar(10)); // Distance behind
+            
+            // Smooth lerp
+            camera.position.lerp(targetPos, 0.1);
+            
+            // Look at point slightly ahead of car
+            const lookAtPos = carMesh.position.clone().add(vel.clone().multiplyScalar(0.5));
+            camera.lookAt(lookAtPos);
+
+            // Dynamic FOV
+            const targetFOV = 60 + (state.speed * 0.2);
+            camera.fov = THREE.MathUtils.lerp(camera.fov, Math.min(targetFOV, 90), 0.1);
+            camera.updateProjectionMatrix();
+
+            // UI
+            document.getElementById('speed').innerText = state.speed;
+        }
+
+        // Environment Animation
+        state.coins.forEach(c => c.mesh.rotation.y += 3 * dt);
+        
+        // Particles
+        for(let i=state.particles.length-1; i>=0; i--) {
+            const p = state.particles[i];
+            p.life -= dt;
+            p.mesh.position.add(p.vel);
+            p.mesh.material.opacity = p.life;
+            p.mesh.lookAt(camera.position);
+            if(p.life <= 0) {
+                scene.remove(p.mesh);
+                state.particles.splice(i, 1);
+            }
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    // --- GAME FLOW ---
+    function startGame() {
+        state.isPlaying = true;
+        state.score = 0;
+        state.speed = 0;
+        
+        carBody.position.set(0, 2, 0);
+        carBody.velocity.set(0,0,0);
+        carBody.angularVelocity.set(0,0,0);
+        carHeading = 0;
+
+        // Reset Coins & Obstacles
+        state.coins.forEach(c => { scene.remove(c.mesh); world.removeBody(c.body); });
+        state.coins = [];
+        state.obstacles.forEach(o => { scene.remove(o.mesh); world.removeBody(o.body); });
+        state.obstacles = [];
+
+        // Generate Level
+        for(let i=0; i<30; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const r = 30 + Math.random() * 150;
+            spawnCoin(Math.cos(angle)*r, Math.sin(angle)*r);
+            
+            if(i % 2 === 0) {
+                const r2 = 40 + Math.random() * 150;
+                spawnObstacle(Math.cos(angle)*r2, Math.sin(angle)*r2);
+            }
+        }
+
+        document.getElementById('main-menu').classList.add('hidden');
+        document.getElementById('game-over').classList.add('hidden');
+    }
+
+    document.getElementById('start-btn').addEventListener('click', startGame);
+    document.getElementById('restart-btn').addEventListener('click', startGame);
+
+    // Resize
+    window.addEventListener('resize', () => {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+    });
+
+    animate();
+
+</script>
+</body>
+</html>
